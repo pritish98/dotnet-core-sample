@@ -1,36 +1,82 @@
 # Build ASP.NET Core project using Azure Pipelines
 # https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core?view=vsts
+trigger:
+  branches:
+    include:
+    - master
+    - develop
+    - release/*
+     
+name: al_$(SourceBranchName)_$(date:yyyyMMdd)$(rev:.r)
+jobs:
+- job: GatedBuild
+  displayName: Gated Build
+  condition: eq(variables['Build.reason'],'PullRequest')
+  pool:
+    vmImage: 'windows-2019'
+    demands:
+    - msbuild
+    - visualstudio
 
-pool:
-  vmImage: 'Ubuntu 16.04'
-  
-variables:
-  buildConfiguration: 'Release'
 
-steps:
+  variables:
+    buildConfiguration: 'Release'
+    system.debug: true
+
+    steps:
   
-- task: UseDotNet@2
-  inputs:
-    version: '5.0.x'
-    includePreviewVersions: true # Required for preview versions
+    - task: UseDotNet@2
+      inputs:
+        version: '5.0.x'
+        includePreviewVersions: true # Required for preview versions
+
+    - task: DotNetCoreCLI@2
+        displayName:'dotnet build'   
+        command:'build'
+        configuration:$(buildConfiguration)
   
-- task: DotNetCoreCLI@2
-  displayName: 'dotnet build'
-  inputs:
-    command: 'build'
-    configuration: $(buildConfiguration)
-  
-- task: DotNetCoreCLI@2
-  inputs:
-    command: publish
-    publishWebProjects: True
-    arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)'
-    zipAfterPublish: True
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: publish
+        publishWebProjects: True
+        arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: True
 
 # this code takes all the files in $(Build.ArtifactStagingDirectory) and uploads them as an artifact of your build.
-- task: PublishBuildArtifacts@1
-  inputs:
-    pathtoPublish: '$(Build.ArtifactStagingDirectory)' 
-    artifactName: 'myWebsiteName'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathtoPublish: '$(Build.ArtifactStagingDirectory)' 
+        artifactName: 'myWebsiteName'
 
+- job: CIBuild
+  displayName: Build Dotnet Core Sample
+  condition: ne(variables['Build.Reason'],'PullRequest')
+  pool:
+    vmImage: 'Windows-2019'
 
+  variables: 
+    BuildConfiguration: 'release'
+
+  steps:
+    - task: UseDotNet@2
+      inputs:
+        version: '5.0.x'
+        includePreviewVersions: true # Required for preview versions
+
+    - task: DotNetCoreCLI@2
+        displayName:'dotnet build'   
+        command:'build'
+        configuration:$(buildConfiguration)
+  
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: publish
+        publishWebProjects: True
+        arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: True
+
+# this code takes all the files in $(Build.ArtifactStagingDirectory) and uploads them as an artifact of your build.
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathtoPublish: '$(Build.ArtifactStagingDirectory)' 
+        artifactName: 'myWebsiteName'
